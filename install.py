@@ -1,9 +1,4 @@
-import os, sys, subprocess, signal, socket, termcolor, requests
-from tqdm import tqdm
-
-CONFIG_DIR = "/etc/traefik/"
-CONFIG_FILE = os.path.join(CONFIG_DIR, "traefik.yml")
-DYNAMIC_FILE = os.path.join(CONFIG_DIR, "dynamic.yml")
+import os, sys, subprocess, signal, socket
 
 def run_command(command):
     process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
@@ -18,6 +13,11 @@ def install_module(module_name):
     run_command([sys.executable, "-m", "pip", "install", module_name])
 
 def check_and_install_modules():
+    try:
+        subprocess.run([sys.executable, "-m", "pip", "--version"], check=True)
+    except subprocess.CalledProcessError:
+        install_pip()
+    
     modules = ["tqdm", "termcolor", "requests"]
     for module in modules:
         try:
@@ -25,10 +25,18 @@ def check_and_install_modules():
         except ImportError:
             install_module(module)
 
+# Check and install necessary modules
 check_and_install_modules()
 
-def clear_screen():
-    os.system('cls' if os.name == 'nt' else 'clear')
+# Import modules after ensuring they are installed
+import termcolor
+import requests
+from tqdm import tqdm
+
+CONFIG_DIR = "/etc/traefik/"
+CONFIG_FILE = os.path.join(CONFIG_DIR, "traefik.yml")
+DYNAMIC_FILE = os.path.join(CONFIG_DIR, "dynamic.yml")
+SERVICE_FILE = "/etc/systemd/system/traefik-tunnel.service"
 
 def signal_handler(sig, frame):
     print(termcolor.colored("\nOperation cancelled by the user.", "red"))
@@ -51,7 +59,7 @@ def check_port_available(port):
         result = sock.connect_ex(('localhost', port))
         return result != 0
 
-def create_config_files(ip_iran, ip_abroad, ports_list):
+def create_config_files(ip_backend, ports_list):
     traefik_config = "entryPoints:\n"
     for port in ports_list:
         traefik_config += f"  port_{port}:\n    address: ':{port}'\n"
@@ -62,7 +70,7 @@ def create_config_files(ip_iran, ip_abroad, ports_list):
         dynamic_config += f"    tcp_router_{port}:\n      entryPoints:\n        - port_{port}\n      service: tcp_service_{port}\n      rule: 'HostSNI(`*`)'\n"
     dynamic_config += "  services:\n"
     for port in ports_list:
-        dynamic_config += f"    tcp_service_{port}:\n      loadBalancer:\n        servers:\n          - address: '{ip_iran}:{port}'\n          - address: '{ip_abroad}:{port}'\n"
+        dynamic_config += f"    tcp_service_{port}:\n      loadBalancer:\n        servers:\n          - address: '{ip_backend}:{port}'\n"
 
     os.makedirs(CONFIG_DIR, exist_ok=True)
     with open(CONFIG_FILE, "w") as traefik_file:
@@ -71,6 +79,8 @@ def create_config_files(ip_iran, ip_abroad, ports_list):
         dynamic_file.write(dynamic_config)
 
 def install_tunnel():
+    check_requirements()
+    
     while True:
         print("Select IP version:")
         print("1 - IPv6")
@@ -86,8 +96,7 @@ def install_tunnel():
         else:
             print(termcolor.colored("Invalid choice. Please enter '1' or '2'.", "red"))
 
-    ip_iran = input(f"Enter IPv{version} address of the Iran server: ")
-    ip_abroad = input(f"Enter IPv{version} address of the Abroad server: ")
+    ip_backend = input(f"Enter IPv{version} address of the Kharej server: ")
     ports = input("Enter the ports to tunnel (comma-separated): ")
     ports_list = ports.split(',')
 
@@ -96,7 +105,7 @@ def install_tunnel():
             print(termcolor.colored(f"Port {port} is already in use. Please choose another port.", "red"))
             return
 
-    create_config_files(ip_iran, ip_abroad, ports_list)
+    create_config_files(ip_backend, ports_list)
 
     service_file_content = f"""
 [Unit]
@@ -113,8 +122,7 @@ StandardError=journal
 [Install]
 WantedBy=multi-user.target
 """
-    service_file_path = "/etc/systemd/system/traefik-tunnel.service"
-    with open(service_file_path, "w") as service_file:
+    with open(SERVICE_FILE, "w") as service_file:
         service_file.write(service_file_content)
 
     run_command(["sudo", "systemctl", "daemon-reload"])
@@ -122,85 +130,50 @@ WantedBy=multi-user.target
     run_command(["sudo", "systemctl", "start", "traefik-tunnel.service"])
 
     print(termcolor.colored("Tunnel is being established and the service is running in the background...", "green"))
-    input(termcolor.colored("Press any key to continue...", "cyan"))
 
 def uninstall_tunnel():
     try:
         run_command(["sudo", "systemctl", "stop", "traefik-tunnel.service"])
         run_command(["sudo", "systemctl", "disable", "traefik-tunnel.service"])
-        os.remove("/etc/systemd/system/traefik-tunnel.service")
-        os.remove(CONFIG_FILE)
-        os.remove(DYNAMIC_FILE)
+        if os.path.exists(SERVICE_FILE):
+            os.remove(SERVICE_FILE)
+        if os.path.exists(CONFIG_FILE):
+            os.remove(CONFIG_FILE)
+        if os.path.exists(DYNAMIC_FILE):
+            os.remove(DYNAMIC_FILE)
         run_command(["sudo", "systemctl", "daemon-reload"])
         print(termcolor.colored("Tunnel has been successfully removed.", "green"))
     except Exception as e:
         print(termcolor.colored(f"An error occurred while removing the tunnel: {e}", "red"))
-    input(termcolor.colored("Press any key to continue...", "cyan"))
 
-def display_banner():
-    banner = """
-+-------------------------------------------------------------------------------------------------------------------------------------+    
-|#### ##  ### ##     ##     ### ###  ### ###    ####   ##  ###      #### ##  ##  ###  ###  ##  ###  ##  ### ###  ####                 |
-|# ## ##   ##  ##     ##     ##  ##   ##  ##     ##    ##  ##       # ## ##  ##   ##    ## ##    ## ##   ##  ##   ##                  |  
-|  ##      ##  ##   ## ##    ##       ##         ##    ## ##          ##     ##   ##   # ## #   # ## #   ##       ##                  |  
-|  ##      ## ##    ##  ##   ## ##    ## ##      ##    ## ##          ##     ##   ##   ## ##    ## ##    ## ##    ##    TG CHANNEL    |
-|  ##      ## ##    ## ###   ##       ##         ##    ## ###         ##     ##   ##   ##  ##   ##  ##   ##       ##    @DVHOST_CLOUD |
-|  ##      ##  ##   ##  ##   ##  ##   ##         ##    ##  ##         ##     ##   ##   ##  ##   ##  ##   ##  ##   ##  ##              |  
-| ####    #### ##  ###  ##  ### ###  ####       ####   ##  ###       ####     ## ##   ###  ##  ###  ##  ### ###  ### ###              |   
-+-------------------------------------------------------------------------------------------------------------------------------------+   
-"""
-    print(termcolor.colored(banner, "cyan"))
-
-def check_tunnel_status():
+def display_tunnel_status():
     try:
         response = requests.get("http://localhost:8080/api/rawdata")
         if response.status_code == 200:
-            return response.json()
+            status = response.json()
+            routers = status.get('tcp', {}).get('routers', {})
+            services = status.get('tcp', {}).get('services', {})
+            
+            print(termcolor.colored("Routers:", "yellow"))
+            for router, details in routers.items():
+                print(f"  - {router}: {details}")
+
+            print(termcolor.colored("Services:", "yellow"))
+            for service, details in services.items():
+                print(f"  - {service}: {details}")
+            print(termcolor.colored("Tunnel is up and running.", "green"))
         else:
             print(termcolor.colored("Failed to retrieve Traefik status. Please check if Traefik is running.", "red"))
-            return None
     except requests.exceptions.RequestException as e:
         print(termcolor.colored(f"Error connecting to Traefik API: {e}", "red"))
-        return None
-
-def display_tunnel_status():
-    status = check_tunnel_status()
-    if status:
-        routers = status.get('tcp', {}).get('routers', {})
-        services = status.get('tcp', {}).get('services', {})
-        
-        print(termcolor.colored("Routers:", "yellow"))
-        for router, details in routers.items():
-            print(f"  - {router}: {details}")
-
-        print(termcolor.colored("Services:", "yellow"))
-        for service, details in services.items():
-            print(f"  - {service}: {details}")
-        print(termcolor.colored("Tunnel is up and running.", "green"))
-    else:
-        print(termcolor.colored("Tunnel is not running. Please check the Traefik configuration.", "red"))
-
-def main():
-    check_requirements()
-    
-    while True:
-        clear_screen()
-        display_banner()
-        print("\nSelect an option:")
-        print("1 - Install Tunnel")
-        print("2 - Uninstall Tunnel")
-        print("3 - Exit")
-        
-        choice = input("Enter your choice: ")
-        
-        if choice == "1":
-            install_tunnel()
-        elif choice == "2":
-            uninstall_tunnel()
-        elif choice == "3":
-            break
-        else:
-            print(termcolor.colored("Invalid choice. Please try again.", "red"))
 
 if __name__ == "__main__":
-    main()
+    if len(sys.argv) > 1:
+        if sys.argv[1] == "install":
+            install_tunnel()
+        elif sys.argv[1] == "uninstall":
+            uninstall_tunnel()
+        elif sys.argv[1] == "status":
+            display_tunnel_status()
+        else:
+            print("Invalid argument. Use 'install', 'uninstall', or 'status'.")
