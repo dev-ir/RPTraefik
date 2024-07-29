@@ -10,7 +10,7 @@ NC='\033[0m' # No Color
 
 cur_dir=$(pwd)
 # check root
-[[ $EUID -ne 0 ]] && echo -e "${RED}Fatal error: ${plain} Please run this script with root privilege \n " && exit 1
+# [[ $EUID -ne 0 ]] && echo -e "${RED}Fatal error: ${plain} Please run this script with root privilege \n " && exit 1
 
 install_jq() {
     if ! command -v jq &> /dev/null; then
@@ -68,11 +68,11 @@ menu(){
     echo -e "|${GREEN}Server Country    |${NC} $SERVER_COUNTRY"
     echo -e "|${GREEN}Server IP         |${NC} $SERVER_IP"
     echo -e "|${GREEN}Server ISP        |${NC} $SERVER_ISP"
-    echo "+-------------------------------------------------------------------------------------------------+"
+    echo "+------------------------------------------------------------------------------------------------+"
     echo -e "|${YELLOW}Please choose an option:${NC}"
-    echo "+-------------------------------------------------------------------------------------------------+"
+    echo "+------------------------------------------------------------------------------------------------+"
     echo -e $1
-    echo "+-------------------------------------------------------------------------------------------------+"
+    echo "+------------------------------------------------------------------------------------------------+"
     echo -e "\033[0m"
 }
 
