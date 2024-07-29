@@ -1,32 +1,32 @@
 import os, sys, subprocess, signal, socket
 
-def dvhost_run_command(command):
+def run_command(command):
     process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     process.communicate()
     return process.returncode
 
-def dvhost_install_pip():
-    dvhost_run_command(["sudo", "apt", "update"])
-    dvhost_run_command(["sudo", "apt", "install", "-y", "python3-pip"])
+def install_pip():
+    run_command(["sudo", "apt", "update"])
+    run_command(["sudo", "apt", "install", "-y", "python3-pip"])
 
-def dvhost_install_module(module_name):
-    dvhost_run_command([sys.executable, "-m", "pip", "install", module_name])
+def install_module(module_name):
+    run_command([sys.executable, "-m", "pip", "install", module_name])
 
-def dvhost_check_and_install_modules():
+def check_and_install_modules():
     try:
         subprocess.run([sys.executable, "-m", "pip", "--version"], check=True)
     except subprocess.CalledProcessError:
-        dvhost_install_pip()
+        install_pip()
     
     modules = ["tqdm", "termcolor", "requests"]
     for module in modules:
         try:
             __import__(module)
         except ImportError:
-            dvhost_install_module(module)
+            install_module(module)
 
 # Check and install necessary modules
-dvhost_check_and_install_modules()
+check_and_install_modules()
 
 # Import modules after ensuring they are installed
 import termcolor
@@ -38,28 +38,28 @@ CONFIG_FILE = os.path.join(CONFIG_DIR, "traefik.yml")
 DYNAMIC_FILE = os.path.join(CONFIG_DIR, "dynamic.yml")
 SERVICE_FILE = "/etc/systemd/system/traefik-tunnel.service"
 
-def dvhost_signal_handler(sig, frame):
+def signal_handler(sig, frame):
     print(termcolor.colored("\nOperation cancelled by the user.", "red"))
     sys.exit(0)
 
-signal.signal(signal.SIGINT, dvhost_signal_handler)
+signal.signal(signal.SIGINT, signal_handler)
 
-def dvhost_check_requirements():
+def check_requirements():
     try:
         subprocess.run(["which", "traefik"], check=True)
     except subprocess.CalledProcessError:
         print(termcolor.colored("Traefik is not installed. Installing Traefik...", "yellow"))
-        dvhost_run_command(["curl", "-L", "https://github.com/traefik/traefik/releases/download/v3.1.0/traefik_v3.1.0_linux_amd64.tar.gz", "-o", "traefik.tar.gz"])
-        dvhost_run_command(["tar", "-xvzf", "traefik.tar.gz"])
-        dvhost_run_command(["sudo", "mv", "traefik", "/usr/local/bin/"])
+        run_command(["curl", "-L", "https://github.com/traefik/traefik/releases/download/v3.1.0/traefik_v3.1.0_linux_amd64.tar.gz", "-o", "traefik.tar.gz"])
+        run_command(["tar", "-xvzf", "traefik.tar.gz"])
+        run_command(["sudo", "mv", "traefik", "/usr/local/bin/"])
         os.remove("traefik.tar.gz")
 
-def dvhost_check_port_available(port):
+def check_port_available(port):
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         result = sock.connect_ex(('localhost', port))
         return result != 0
 
-def dvhost_create_config_files(ip_backend, ports_list):
+def create_config_files(ip_backend, ports_list):
     traefik_config = "entryPoints:\n"
     for port in ports_list:
         traefik_config += f"  port_{port}:\n    address: ':{port}'\n"
@@ -78,8 +78,8 @@ def dvhost_create_config_files(ip_backend, ports_list):
     with open(DYNAMIC_FILE, "w") as dynamic_file:
         dynamic_file.write(dynamic_config)
 
-def dvhost_install_tunnel():
-    dvhost_check_requirements()
+def install_tunnel():
+    check_requirements()
     
     while True:
         print("Select IP version:")
@@ -101,11 +101,11 @@ def dvhost_install_tunnel():
     ports_list = ports.split(',')
 
     for port in ports_list:
-        if not dvhost_check_port_available(int(port)):
+        if not check_port_available(int(port)):
             print(termcolor.colored(f"Port {port} is already in use. Please choose another port.", "red"))
             return
 
-    dvhost_create_config_files(ip_backend, ports_list)
+    create_config_files(ip_backend, ports_list)
 
     service_file_content = f"""
 [Unit]
@@ -125,28 +125,28 @@ WantedBy=multi-user.target
     with open(SERVICE_FILE, "w") as service_file:
         service_file.write(service_file_content)
 
-    dvhost_run_command(["sudo", "systemctl", "daemon-reload"])
-    dvhost_run_command(["sudo", "systemctl", "enable", "traefik-tunnel.service"])
-    dvhost_run_command(["sudo", "systemctl", "start", "traefik-tunnel.service"])
+    run_command(["sudo", "systemctl", "daemon-reload"])
+    run_command(["sudo", "systemctl", "enable", "traefik-tunnel.service"])
+    run_command(["sudo", "systemctl", "start", "traefik-tunnel.service"])
 
     print(termcolor.colored("Tunnel is being established and the service is running in the background...", "green"))
 
-def dvhost_uninstall_tunnel():
+def uninstall_tunnel():
     try:
-        dvhost_run_command(["sudo", "systemctl", "stop", "traefik-tunnel.service"])
-        dvhost_run_command(["sudo", "systemctl", "disable", "traefik-tunnel.service"])
+        run_command(["sudo", "systemctl", "stop", "traefik-tunnel.service"])
+        run_command(["sudo", "systemctl", "disable", "traefik-tunnel.service"])
         if os.path.exists(SERVICE_FILE):
             os.remove(SERVICE_FILE)
         if os.path.exists(CONFIG_FILE):
             os.remove(CONFIG_FILE)
         if os.path.exists(DYNAMIC_FILE):
             os.remove(DYNAMIC_FILE)
-        dvhost_run_command(["sudo", "systemctl", "daemon-reload"])
+        run_command(["sudo", "systemctl", "daemon-reload"])
         print(termcolor.colored("Tunnel has been successfully removed.", "green"))
     except Exception as e:
         print(termcolor.colored(f"An error occurred while removing the tunnel: {e}", "red"))
 
-def dvhost_display_tunnel_status():
+def display_tunnel_status():
     try:
         response = requests.get("http://localhost:8080/api/rawdata")
         if response.status_code == 200:
@@ -170,10 +170,10 @@ def dvhost_display_tunnel_status():
 if __name__ == "__main__":
     if len(sys.argv) > 1:
         if sys.argv[1] == "install":
-            dvhost_install_tunnel()
+            install_tunnel()
         elif sys.argv[1] == "uninstall":
-            dvhost_uninstall_tunnel()
+            uninstall_tunnel()
         elif sys.argv[1] == "status":
-            dvhost_display_tunnel_status()
+            display_tunnel_status()
         else:
             print("Invalid argument. Use 'install', 'uninstall', or 'status'.")
