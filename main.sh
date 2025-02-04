@@ -63,8 +63,8 @@ menu(){
     case $choice in
         1)  git clone https://github.com/dev-ir/RPTraefik.git
             python3 install.py install ;;
-        2)  python3 install.py uninstall ;;
-        3)  python3 install.py status ;;
+        2)  python3 install.py status ;;
+        3)  python3 install.py uninstall ;;
         0)
             echo -e "${GREEN}Exiting program...${NC}"
             exit 0
