@@ -11,11 +11,9 @@ TG : https://t.me/+EpErnDsDPhw3ZThk
 ## نصب
 
 1. **کلون کردن مخزن**
-   ```bash
-   git clone https://github.com/dev-ir/RPTraefik.git
-   cd RPTraefik
-   bash main.sh
-   ```
+```
+sudo git clone https://github.com/dev-ir/RPTraefik.git /opt/RPTraefik && cd /opt/RPTraefik && bash main.sh
+```
 
 ## ویژگی‌های RPTraefik
 
@@ -37,7 +35,7 @@ RPTraefik راه‌حلی ساده و کارآمد برای انتشار امن 
 
 ## 🪚 پیش نمایش
 <p align="left">
-    <img width="100%" src="https://github.com/user-attachments/assets/74e86f93-fdae-4825-acd0-2dfcc6fb5244" alt="Image">
+    <img width="100%" src="https://github.com/user-attachments/assets/d4c18e46-458c-42d9-b9a1-94b9ad74a15c" alt="Image">
 </p>
 
 ## 🙏 حمایت از ما
