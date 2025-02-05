@@ -1,4 +1,12 @@
-import os, sys, subprocess, signal, socket
+import os, sys, subprocess, signal, socket , yaml
+import termcolor
+import requests
+from tqdm import tqdm
+
+CONFIG_DIR = "/etc/traefik/"
+CONFIG_FILE = os.path.join(CONFIG_DIR, "traefik.yml")
+DYNAMIC_FILE = os.path.join(CONFIG_DIR, "dynamic.yml")
+SERVICE_FILE = "/etc/systemd/system/traefik-tunnel.service"
 
 def run_command(command):
     process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
@@ -25,18 +33,7 @@ def check_and_install_modules():
         except ImportError:
             install_module(module)
 
-# Check and install necessary modules
 check_and_install_modules()
-
-# Import modules after ensuring they are installed
-import termcolor
-import requests
-from tqdm import tqdm
-
-CONFIG_DIR = "/etc/traefik/"
-CONFIG_FILE = os.path.join(CONFIG_DIR, "traefik.yml")
-DYNAMIC_FILE = os.path.join(CONFIG_DIR, "dynamic.yml")
-SERVICE_FILE = "/etc/systemd/system/traefik-tunnel.service"
 
 def signal_handler(sig, frame):
     print(termcolor.colored("\nOperation cancelled by the user.", "red"))
@@ -83,13 +80,10 @@ def install_tunnel():
     
     while True:
         print("Select IP version:")
-        print("2 - IPv4")
+        print("1 - IPv4")
         version_choice = input("Enter your choice: ")
         
         if version_choice == "1":
-            version = '6'
-            break
-        elif version_choice == "2":
             version = '4'
             break
         else:
@@ -150,14 +144,51 @@ def add_port(new_port):
         print(termcolor.colored(f"Port {new_port} is already in use. Please choose another port.", "red"))
         return
     
-    with open(DYNAMIC_FILE, "r") as dynamic_file:
-        lines = dynamic_file.readlines()
+    # Load existing YAML configuration
+    if os.path.exists(DYNAMIC_FILE):
+        with open(DYNAMIC_FILE, "r") as dynamic_file:
+            try:
+                config = yaml.safe_load(dynamic_file) or {}
+            except yaml.YAMLError as e:
+                print(termcolor.colored(f"Error parsing YAML: {e}", "red"))
+                return
+    else:
+        config = {}
+    
+    if "tcp" not in config:
+        config["tcp"] = {"routers": {}, "services": {}}
+    
+    config["tcp"]["routers"][f"tcp_router_{new_port}"] = {
+        "entryPoints": [f"port_{new_port}"],
+        "service": f"tcp_service_{new_port}",
+        "rule": "HostSNI(`*`)"
+    }
+    
+    config["tcp"]["services"][f"tcp_service_{new_port}"] = {
+        "loadBalancer": {"servers": [{"address": f"127.0.0.1:{new_port}"}]}
+    }
     
     with open(DYNAMIC_FILE, "w") as dynamic_file:
-        for line in lines:
-            dynamic_file.write(line)
-        dynamic_file.write(f"\n    tcp_router_{new_port}:\n      entryPoints:\n        - port_{new_port}\n      service: tcp_service_{new_port}\n      rule: 'HostSNI(`*`)'\n")
-        dynamic_file.write(f"    tcp_service_{new_port}:\n      loadBalancer:\n        servers:\n          - address: '127.0.0.1:{new_port}'\n")
+        yaml.dump(config, dynamic_file, default_flow_style=False)
+    
+    # Update traefik.yml
+    if os.path.exists(CONFIG_FILE):
+        with open(CONFIG_FILE, "r") as traefik_file:
+            try:
+                traefik_config = yaml.safe_load(traefik_file) or {}
+            except yaml.YAMLError as e:
+                print(termcolor.colored(f"Error parsing traefik.yml: {e}", "red"))
+                return
+    else:
+        traefik_config = {}
+    
+    if "entryPoints" not in traefik_config:
+        traefik_config["entryPoints"] = {}
+    
+    traefik_config["entryPoints"][f"port_{new_port}"] = {"address": f":{new_port}"}
+    
+    with open(CONFIG_FILE, "w") as traefik_file:
+        yaml.dump(traefik_config, traefik_file, default_flow_style=False)
     
     run_command(["sudo", "systemctl", "restart", "traefik-tunnel.service"])
     print(termcolor.colored(f"Port {new_port} has been added successfully.", "green"))
@@ -189,8 +220,8 @@ if __name__ == "__main__":
             install_tunnel()
         elif sys.argv[1] == "uninstall":
             uninstall_tunnel()
-        elif sys.argv[1] == "add-port":
-            add_port()
+        elif sys.argv[1] == "add-port" and len(sys.argv) > 2:
+            add_port(sys.argv[2])
         elif sys.argv[1] == "status":
             display_tunnel_status()
         else:
