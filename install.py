@@ -83,7 +83,6 @@ def install_tunnel():
     
     while True:
         print("Select IP version:")
-        print("1 - IPv6")
         print("2 - IPv4")
         version_choice = input("Enter your choice: ")
         
