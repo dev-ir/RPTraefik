@@ -146,6 +146,23 @@ def uninstall_tunnel():
     except Exception as e:
         print(termcolor.colored(f"An error occurred while removing the tunnel: {e}", "red"))
 
+def add_port(new_port):
+    if not check_port_available(int(new_port)):
+        print(termcolor.colored(f"Port {new_port} is already in use. Please choose another port.", "red"))
+        return
+    
+    with open(DYNAMIC_FILE, "r") as dynamic_file:
+        lines = dynamic_file.readlines()
+    
+    with open(DYNAMIC_FILE, "w") as dynamic_file:
+        for line in lines:
+            dynamic_file.write(line)
+        dynamic_file.write(f"\n    tcp_router_{new_port}:\n      entryPoints:\n        - port_{new_port}\n      service: tcp_service_{new_port}\n      rule: 'HostSNI(`*`)'\n")
+        dynamic_file.write(f"    tcp_service_{new_port}:\n      loadBalancer:\n        servers:\n          - address: '127.0.0.1:{new_port}'\n")
+    
+    run_command(["sudo", "systemctl", "restart", "traefik-tunnel.service"])
+    print(termcolor.colored(f"Port {new_port} has been added successfully.", "green"))
+
 def display_tunnel_status():
     try:
         response = requests.get("http://localhost:8080/api/rawdata")
@@ -173,6 +190,8 @@ if __name__ == "__main__":
             install_tunnel()
         elif sys.argv[1] == "uninstall":
             uninstall_tunnel()
+        elif sys.argv[1] == "add-port":
+            add_port()
         elif sys.argv[1] == "status":
             display_tunnel_status()
         else:
