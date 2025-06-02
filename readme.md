@@ -8,7 +8,7 @@ Channel : https://t.me/+EpErnDsDPhw3ZThk
 Groups  : https://t.me/dvhost_groups
 ## نصب
 ```
-sudo git clone https://github.com/dev-ir/RPTraefik.git /opt/RPTraefik && cd /opt/RPTraefik && bash main.sh
+bash <(curl -Ls https://raw.githubusercontent.com/dev-ir/RPTraefik/master/main.sh)
 ```
 
 ## ویژگی‌های RPTraefik
