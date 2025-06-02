@@ -46,7 +46,7 @@ def check_requirements():
         subprocess.run(["which", "traefik"], check=True)
     except subprocess.CalledProcessError:
         print(termcolor.colored("Traefik is not installed. Installing Traefik...", "yellow"))
-        run_command(["curl", "-L", "https://github.com/traefik/traefik/releases/download/v3.3.3/traefik_v3.3.3_linux_amd64.tar.gz", "-o", "traefik.tar.gz"])
+        run_command(["curl", "-L", "https://github.com/traefik/traefik/releases/download/v3.4.1/traefik_v3.4.1_linux_amd64.tar.gz", "-o", "traefik.tar.gz"])
         run_command(["tar", "-xvzf", "traefik.tar.gz"])
         run_command(["sudo", "mv", "traefik", "/usr/local/bin/"])
         os.remove("traefik.tar.gz")
